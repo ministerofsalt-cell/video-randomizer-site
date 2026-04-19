@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Video Randomizer — Interactive Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ── Design tokens ───────────────────────────────────────────────── */
+:root {
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  --text-xs:   clamp(0.75rem,  0.7rem  + 0.25vw, 0.875rem);
+  --text-sm:   clamp(0.875rem, 0.8rem  + 0.35vw, 1rem);
+  --text-base: clamp(1rem,     0.95rem + 0.25vw, 1.125rem);
+  --text-lg:   clamp(1.125rem, 1rem    + 0.75vw, 1.5rem);
+  --text-xl:   clamp(1.5rem,   1.2rem  + 1.25vw, 2.25rem);
+
+  --space-1: 0.25rem; --space-2: 0.5rem; --space-3: 0.75rem;
+  --space-4: 1rem;    --space-5: 1.25rem; --space-6: 1.5rem;
+  --space-8: 2rem;    --space-10: 2.5rem; --space-12: 3rem;
+
+  --radius-sm: 0.375rem; --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;  --radius-xl: 1rem; --radius-full: 9999px;
+  --transition: 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+[data-theme="dark"] {
+  --bg:        #111110;
+  --surface:   #1a1918;
+  --surface-2: #201f1d;
+  --surface-3: #272523;
+  --border:    rgba(255,255,255,0.08);
+  --text:      #e8e6e3;
+  --muted:     #706e6b;
+  --faint:     #3d3c3a;
+  --accent:    #4f98a3;
+  --accent-hover: #3a8290;
+  --accent-dim: rgba(79,152,163,0.15);
+  --gold:      #e8af34;
+  --gold-dim:  rgba(232,175,52,0.15);
+  --success:   #6daa45;
+  --success-dim: rgba(109,170,69,0.12);
+  --error:     #e05a5a;
+  --error-dim: rgba(224,90,90,0.12);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.4);
+  --shadow-lg: 0 12px 40px rgba(0,0,0,0.6);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { -webkit-font-smoothing: antialiased; scroll-behavior: smooth; }
+body {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--text);
+  background: var(--bg);
+  min-height: 100dvh;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* ── App shell ───────────────────────────────────────────────────── */
+.app {
+  display: grid;
+  grid-template-rows: 48px 1fr 32px;
+  grid-template-columns: 260px 1fr;
+  height: 100dvh;
+  max-height: 100dvh;
+}
+
+/* ── Top bar ─────────────────────────────────────────────────────── */
+.topbar {
+  grid-column: 1 / -1;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-4);
+  gap: var(--space-3);
+}
+.topbar-logo {
+  display: flex; align-items: center; gap: var(--space-2);
+  color: var(--accent); font-weight: 700; font-size: var(--text-sm);
+  letter-spacing: -0.01em;
+}
+.topbar-logo svg { flex-shrink: 0; }
+.topbar-divider { width: 1px; height: 20px; background: var(--border); margin: 0 var(--space-2); }
+.topbar-badge {
+  background: var(--accent-dim); color: var(--accent);
+  font-size: var(--text-xs); font-weight: 600;
+  padding: 2px 8px; border-radius: var(--radius-full);
+  border: 1px solid rgba(79,152,163,0.25);
+}
+.topbar-right { margin-left: auto; display: flex; align-items: center; gap: var(--space-2); }
+.tb-btn {
+  background: var(--surface-2); color: var(--muted);
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  padding: 4px 12px; font-size: var(--text-xs); font-weight: 500;
+  cursor: pointer; transition: all var(--transition);
+}
+.tb-btn:hover { color: var(--text); border-color: rgba(255,255,255,0.15); }
+.tb-btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.tb-btn.primary:hover { background: var(--accent-hover); }
+
+/* ── Stats strip ─────────────────────────────────────────────────── */
+.stats {
+  grid-column: 1 / -1;
+  display: flex; align-items: center; gap: var(--space-1);
+  padding: 0 var(--space-4);
+  background: var(--surface-2);
+  border-top: 1px solid var(--border);
+  font-size: var(--text-xs);
+}
+.stat { display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-3); }
+.stat-val { color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; }
+.stat-lbl { color: var(--muted); }
+.stat-sep { color: var(--faint); }
+
+/* ── Sidebar ─────────────────────────────────────────────────────── */
+.sidebar {
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  padding: var(--space-4) var(--space-3);
+  display: flex; flex-direction: column; gap: var(--space-5);
+}
+.sidebar::-webkit-scrollbar { width: 4px; }
+.sidebar::-webkit-scrollbar-track { background: transparent; }
+.sidebar::-webkit-scrollbar-thumb { background: var(--faint); border-radius: 4px; }
+
+.section-label {
+  font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--muted);
+  padding: 0 var(--space-2); margin-bottom: var(--space-2);
+}
+
+/* Random button */
+.rand-btn {
+  width: 100%; padding: var(--space-3) var(--space-4);
+  background: var(--accent); color: #fff;
+  border: none; border-radius: var(--radius-lg);
+  font-size: var(--text-sm); font-weight: 600;
+  cursor: pointer; transition: all var(--transition);
+  display: flex; align-items: center; justify-content: center; gap: var(--space-2);
+  box-shadow: 0 2px 8px rgba(79,152,163,0.3);
+}
+.rand-btn:hover { background: var(--accent-hover); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(79,152,163,0.4); }
+.rand-btn:active { transform: translateY(0); }
+.rand-btn.spinning svg { animation: spin 0.5s ease-out; }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+/* Last picked */
+.last-picked {
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius-md); padding: var(--space-3);
+  font-size: var(--text-xs); color: var(--muted);
+  display: none;
+}
+.last-picked.visible { display: block; }
+.last-picked strong { color: var(--text); display: block; margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Sidebar buttons */
+.side-btn {
+  width: 100%; padding: var(--space-2) var(--space-3);
+  background: var(--surface-2); color: var(--muted);
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  font-size: var(--text-xs); font-weight: 500;
+  cursor: pointer; transition: all var(--transition);
+  text-align: left; display: flex; align-items: center; gap: var(--space-2);
+  margin-bottom: var(--space-1);
+}
+.side-btn:hover { color: var(--text); background: var(--surface-3); }
+
+/* ── Right panel ─────────────────────────────────────────────────── */
+.right {
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+/* Tabs */
+.tabs {
+  display: flex; gap: var(--space-1);
+  padding: var(--space-3) var(--space-4) 0;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.tab {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-xs); font-weight: 500; color: var(--muted);
+  cursor: pointer; border-radius: var(--radius-md) var(--radius-md) 0 0;
+  border: 1px solid transparent; border-bottom: none;
+  transition: all var(--transition); background: transparent;
+  position: relative; bottom: -1px;
+}
+.tab:hover { color: var(--text); }
+.tab.active {
+  color: var(--text); background: var(--bg);
+  border-color: var(--border); border-bottom-color: var(--bg);
+}
+
+/* Toolbar */
+.toolbar {
+  display: flex; align-items: center; gap: var(--space-1);
+  padding: var(--space-2) var(--space-4);
+  background: var(--surface-2); border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.sel-info { font-size: var(--text-xs); color: var(--muted); margin-right: var(--space-2); }
+.act-btn {
+  padding: 4px 10px; font-size: var(--text-xs); font-weight: 500;
+  border-radius: var(--radius-sm); border: 1px solid var(--border);
+  background: var(--surface); color: var(--muted);
+  cursor: pointer; transition: all var(--transition);
+}
+.act-btn:hover { color: var(--text); background: var(--surface-3); }
+.act-btn.danger:hover { color: var(--error); border-color: var(--error); background: var(--error-dim); }
+.act-btn.gold:hover { color: var(--gold); border-color: var(--gold); background: var(--gold-dim); }
+
+/* Video list */
+.list-wrap { overflow: auto; }
+.list-wrap::-webkit-scrollbar { width: 6px; height: 6px; }
+.list-wrap::-webkit-scrollbar-track { background: transparent; }
+.list-wrap::-webkit-scrollbar-thumb { background: var(--faint); border-radius: 4px; }
+
+table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+thead th {
+  position: sticky; top: 0; z-index: 2;
+  background: var(--surface); color: var(--muted);
+  font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.04em;
+  padding: var(--space-2) var(--space-3); text-align: left;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer; white-space: nowrap; transition: color var(--transition);
+}
+thead th:hover { color: var(--text); }
+thead th .sort-arrow { opacity: 0.4; margin-left: 4px; }
+thead th.sorted { color: var(--accent); }
+thead th.sorted .sort-arrow { opacity: 1; color: var(--accent); }
+
+tbody tr {
+  border-bottom: 1px solid var(--border);
+  transition: background var(--transition);
+  cursor: pointer;
+}
+tbody tr:hover { background: rgba(255,255,255,0.03); }
+tbody tr.selected { background: rgba(79,152,163,0.1); }
+tbody tr.watched { opacity: 0.5; }
+tbody tr.favorite td:first-child { color: var(--gold); }
+tbody tr.unwanted { opacity: 0.3; text-decoration: line-through; }
+
+td {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-xs); color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+td.star { width: 36px; text-align: center; font-size: 14px; cursor: pointer; }
+td.name { width: 220px; font-weight: 500; }
+td.path { color: var(--muted); font-family: var(--font-mono); font-size: 11px; }
+td.date { width: 130px; color: var(--muted); }
+td.status { width: 90px; }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: var(--radius-full);
+  font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
+}
+.badge.watched { background: var(--success-dim); color: var(--success); }
+.badge.fav     { background: var(--gold-dim);    color: var(--gold); }
+.badge.queue   { background: var(--accent-dim);  color: var(--accent); }
+.badge.unwanted{ background: var(--error-dim);   color: var(--error); }
+
+/* Now playing overlay */
+.now-playing {
+  position: fixed; bottom: var(--space-10); left: 50%; transform: translateX(-50%) translateY(80px);
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius-xl); padding: var(--space-4) var(--space-6);
+  box-shadow: var(--shadow-lg); display: flex; align-items: center; gap: var(--space-4);
+  min-width: 360px; transition: transform 0.4s cubic-bezier(0.16,1,0.3,1), opacity 0.4s;
+  opacity: 0; pointer-events: none; z-index: 100;
+}
+.now-playing.show { transform: translateX(-50%) translateY(0); opacity: 1; pointer-events: auto; }
+.np-icon {
+  width: 40px; height: 40px; border-radius: var(--radius-md);
+  background: var(--accent-dim); color: var(--accent);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.np-info { flex: 1; min-width: 0; }
+.np-title { font-weight: 600; font-size: var(--text-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.np-sub { color: var(--muted); font-size: var(--text-xs); margin-top: 2px; }
+.np-bars { display: flex; align-items: flex-end; gap: 2px; height: 20px; flex-shrink: 0; }
+.np-bar {
+  width: 3px; background: var(--accent); border-radius: 2px;
+  animation: bar-bounce 0.8s ease-in-out infinite alternate;
+}
+.np-bar:nth-child(1) { height: 8px;  animation-delay: 0s; }
+.np-bar:nth-child(2) { height: 16px; animation-delay: 0.15s; }
+.np-bar:nth-child(3) { height: 12px; animation-delay: 0.3s; }
+.np-bar:nth-child(4) { height: 20px; animation-delay: 0.1s; }
+@keyframes bar-bounce { from { transform: scaleY(0.3); } to { transform: scaleY(1); } }
+
+/* Toast */
+.toast {
+  position: fixed; top: var(--space-12); right: var(--space-4);
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: var(--space-3) var(--space-4);
+  font-size: var(--text-xs); box-shadow: var(--shadow-md);
+  transform: translateX(120%); transition: transform 0.35s cubic-bezier(0.16,1,0.3,1);
+  z-index: 200; max-width: 280px;
+}
+.toast.show { transform: translateX(0); }
+.toast.success { border-color: var(--success); color: var(--success); }
+.toast.info    { border-color: var(--accent);  color: var(--accent); }
+
+/* Demo notice */
+.demo-notice {
+  position: fixed; top: 52px; left: 50%; transform: translateX(-50%);
+  background: rgba(232,175,52,0.12); border: 1px solid rgba(232,175,52,0.3);
+  color: var(--gold); font-size: var(--text-xs); font-weight: 500;
+  padding: 6px 16px; border-radius: var(--radius-full); z-index: 50;
+  letter-spacing: 0.02em;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  .app { grid-template-columns: 1fr; grid-template-rows: 48px 1fr 32px; }
+  .sidebar { display: none; }
+  .right { grid-column: 1; }
+}
+
+/* Scroll row highlight animation */
+@keyframes row-flash {
+  0%   { background: rgba(79,152,163,0.25); }
+  100% { background: transparent; }
+}
+.flash { animation: row-flash 1.2s ease-out forwards; }
+</style>
+</head>
+<body>
+
+<div class="demo-notice">⚡ Interactive Demo — actions are simulated</div>
+
+<div class="app">
+
+  <!-- Top bar -->
+  <header class="topbar" role="banner">
+    <div class="topbar-logo">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-label="Video Randomizer logo">
+        <circle cx="12" cy="12" r="10" fill="rgba(79,152,163,0.15)" stroke="#4f98a3" stroke-width="1.5"/>
+        <polygon points="10,8 17,12 10,16" fill="#4f98a3"/>
+        <path d="M6 5.5 C3.5 8 3.5 16 6 18.5" stroke="#4f98a3" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+        <path d="M18 5.5 C20.5 8 20.5 16 18 18.5" stroke="#4f98a3" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+      </svg>
+      Video Randomizer
+    </div>
+    <div class="topbar-badge">DEMO</div>
+    <div class="topbar-divider"></div>
+    <span id="topbar-status" style="font-size:var(--text-xs);color:var(--muted)">Ready.</span>
+    <div class="topbar-right">
+      <button class="tb-btn" onclick="showToast('Export simulated ✓','success')">Export</button>
+      <button class="tb-btn" onclick="showToast('Import simulated ✓','success')">Import</button>
+      <button class="tb-btn primary" onclick="showToast('Get the full app →','info')">⬇ Download Full App</button>
+    </div>
+  </header>
+
+  <!-- Sidebar -->
+  <aside class="sidebar" role="complementary" aria-label="Controls">
+
+    <section>
+      <div class="section-label">Random Playback</div>
+      <button class="rand-btn" id="rand-btn" onclick="pickRandom()" aria-label="Choose random video">
+        <svg id="rand-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22"/>
+          <path d="m18 2 4 4-4 4"/>
+          <path d="M2 6h1.9c1.5 0 2.9.9 3.5 2.2"/>
+          <path d="M22 18h-5.9c-1.3 0-2.5-.6-3.3-1.7l-.5-.8"/>
+          <path d="m18 14 4 4-4 4"/>
+        </svg>
+        Choose Random Video
+      </button>
+      <div class="last-picked" id="last-picked">
+        Last picked:
+        <strong id="last-name">—</strong>
+      </div>
+      <div style="display:flex;gap:var(--space-2);margin-top:var(--space-2)">
+        <button class="side-btn" style="flex:1" onclick="markLastWatched()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+          Mark watched
+        </button>
+        <button class="side-btn" style="flex:1" onclick="rebuildQueue()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38"/></svg>
+          Rebuild queue
+        </button>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-label">Add Videos</div>
+      <button class="side-btn" onclick="showToast('File picker opens in full app','info')">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        Browse for video files
+      </button>
+      <button class="side-btn" onclick="showToast('Recursive scan in full app','info')">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        Add folder (recursive)
+      </button>
+      <button class="side-btn" onclick="showToast('Top-level scan in full app','info')">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        Add folder (top-level)
+      </button>
+    </section>
+
+    <section>
+      <div class="section-label">Library Stats</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-2)">
+        <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-md);padding:var(--space-3);text-align:center">
+          <div style="font-size:var(--text-lg);font-weight:700;color:var(--accent)" id="stat-total">24</div>
+          <div style="font-size:var(--text-xs);color:var(--muted)">Total</div>
+        </div>
+        <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-md);padding:var(--space-3);text-align:center">
+          <div style="font-size:var(--text-lg);font-weight:700;color:var(--success)" id="stat-queue">18</div>
+          <div style="font-size:var(--text-xs);color:var(--muted)">In Queue</div>
+        </div>
+        <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-md);padding:var(--space-3);text-align:center">
+          <div style="font-size:var(--text-lg);font-weight:700;color:var(--gold)" id="stat-favs">5</div>
+          <div style="font-size:var(--text-xs);color:var(--muted)">Favourites</div>
+        </div>
+        <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-md);padding:var(--space-3);text-align:center">
+          <div style="font-size:var(--text-lg);font-weight:700;color:var(--muted)" id="stat-watched">6</div>
+          <div style="font-size:var(--text-xs);color:var(--muted)">Watched</div>
+        </div>
+      </div>
+    </section>
+
+  </aside>
+
+  <!-- Right panel -->
+  <main class="right" role="main">
+
+    <nav class="tabs" role="tablist" aria-label="Library views">
+      <button class="tab active" role="tab" aria-selected="true"  onclick="switchTab(this,'queue')">Remaining Queue</button>
+      <button class="tab"        role="tab" aria-selected="false" onclick="switchTab(this,'full')">Full Library</button>
+      <button class="tab"        role="tab" aria-selected="false" onclick="switchTab(this,'favorites')">Favourites</button>
+      <button class="tab"        role="tab" aria-selected="false" onclick="switchTab(this,'watched')">Watched</button>
+    </nav>
+
+    <div class="toolbar" role="toolbar" aria-label="Actions">
+      <span class="sel-info" id="sel-info">None selected</span>
+      <button class="act-btn"      onclick="actPlay()"      title="Play selected in VLC">▶ Play</button>
+      <button class="act-btn gold" onclick="actFav()"       title="Toggle favourite">★ Favourite</button>
+      <button class="act-btn"      onclick="actWatched()"   title="Mark as watched">✓ Watched</button>
+      <button class="act-btn"      onclick="actUnwatched()" title="Return to queue">↩ Unwatched</button>
+      <button class="act-btn"      onclick="actUnwanted()"  title="Mark as unwanted">🚫 Unwanted</button>
+      <button class="act-btn danger" onclick="actRemove()"  title="Remove from library">✕ Remove</button>
+    </div>
+
+    <div class="list-wrap">
+      <table role="grid" aria-label="Video list">
+        <thead>
+          <tr>
+            <th style="width:36px" onclick="sortBy('star')" title="Sort by favourite">
+              ★<span class="sort-arrow" id="sort-star"></span>
+            </th>
+            <th style="width:200px" onclick="sortBy('name')" title="Sort by filename">
+              Filename<span class="sort-arrow" id="sort-name"></span>
+            </th>
+            <th onclick="sortBy('path')" title="Sort by path">
+              Full path<span class="sort-arrow" id="sort-path"></span>
+            </th>
+            <th style="width:130px" onclick="sortBy('date')" title="Sort by last watched">
+              Last watched<span class="sort-arrow" id="sort-date"></span>
+            </th>
+            <th style="width:90px" onclick="sortBy('status')" title="Sort by status">
+              Status<span class="sort-arrow" id="sort-status"></span>
+            </th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+
+  </main>
+
+  <!-- Status bar -->
+  <footer class="stats" role="contentinfo">
+    <span class="stat"><span class="stat-val" id="sb-total">24</span><span class="stat-lbl">videos</span></span>
+    <span class="stat-sep">·</span>
+    <span class="stat"><span class="stat-val" id="sb-queue">18</span><span class="stat-lbl">in queue</span></span>
+    <span class="stat-sep">·</span>
+    <span class="stat"><span class="stat-val" id="sb-watched">6</span><span class="stat-lbl">watched</span></span>
+    <span class="stat-sep">·</span>
+    <span class="stat"><span class="stat-val" id="sb-favs">5</span><span class="stat-lbl">favourites</span></span>
+    <span style="margin-left:auto;color:var(--muted);font-size:var(--text-xs)" id="status-msg">Ready.</span>
+  </footer>
+
+</div>
+
+<!-- Now playing toast -->
+<div class="now-playing" id="now-playing" role="status" aria-live="polite">
+  <div class="np-icon">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+  </div>
+  <div class="np-info">
+    <div class="np-title" id="np-title">—</div>
+    <div class="np-sub">Now playing in VLC</div>
+  </div>
+  <div class="np-bars" aria-hidden="true">
+    <div class="np-bar"></div><div class="np-bar"></div>
+    <div class="np-bar"></div><div class="np-bar"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="alert" aria-live="assertive"></div>
+
+<script>
+// ── Data ──────────────────────────────────────────────────────────
+const VIDEOS = [
+  {id:1,  name:"summer_roadtrip_2023.mp4",  path:"D:\\Videos\\Travel",       date:"2026-04-18", fav:true,  watched:true,  unwanted:false},
+  {id:2,  name:"documentary_space_4k.mkv",  path:"D:\\Movies\\Docs",          date:null,         fav:true,  watched:false, unwanted:false},
+  {id:3,  name:"comedy_special_live.mp4",   path:"D:\\Movies\\Comedy",        date:"2026-04-15", fav:false, watched:true,  unwanted:false},
+  {id:4,  name:"action_blockbuster.mkv",    path:"G:\\Films\\Action",         date:null,         fav:false, watched:false, unwanted:false},
+  {id:5,  name:"nature_timelapse_hd.mp4",   path:"D:\\Videos\\Nature",        date:null,         fav:true,  watched:false, unwanted:false},
+  {id:6,  name:"indie_film_festival.mkv",   path:"G:\\Films\\Indie",          date:"2026-04-10", fav:false, watched:true,  unwanted:false},
+  {id:7,  name:"concert_live_4k.mp4",       path:"D:\\Music\\Concerts",       date:null,         fav:true,  watched:false, unwanted:false},
+  {id:8,  name:"tutorial_blender_01.mp4",   path:"C:\\Learning\\3D",          date:"2026-03-22", fav:false, watched:true,  unwanted:false},
+  {id:9,  name:"thriller_short_film.mkv",   path:"G:\\Films\\Short",          date:null,         fav:false, watched:false, unwanted:false},
+  {id:10, name:"wedding_highlights.mp4",    path:"D:\\Personal\\Events",      date:"2026-01-14", fav:true,  watched:true,  unwanted:false},
+  {id:11, name:"gaming_montage_2025.mp4",   path:"C:\\Videos\\Gaming",        date:null,         fav:false, watched:false, unwanted:false},
+  {id:12, name:"old_tv_show_s01e01.mkv",    path:"K:\\TV Shows\\Classic",     date:null,         fav:false, watched:false, unwanted:true},
+  {id:13, name:"drone_footage_coast.mp4",   path:"D:\\Videos\\Aerial",        date:null,         fav:false, watched:false, unwanted:false},
+  {id:14, name:"stand_up_comedy_2024.mp4",  path:"G:\\Films\\Comedy",         date:"2026-04-01", fav:false, watched:true,  unwanted:false},
+  {id:15, name:"anime_movie_bluray.mkv",    path:"K:\\Anime\\Movies",         date:null,         fav:false, watched:false, unwanted:false},
+  {id:16, name:"sci_fi_anthology.mkv",      path:"G:\\Films\\SciFi",          date:null,         fav:false, watched:false, unwanted:false},
+  {id:17, name:"cooking_masterclass.mp4",   path:"C:\\Learning\\Food",        date:null,         fav:false, watched:false, unwanted:false},
+  {id:18, name:"horror_classic_1979.mkv",   path:"D:\\Movies\\Horror",        date:null,         fav:false, watched:false, unwanted:false},
+  {id:19, name:"music_video_compilation.mp4",path:"D:\\Music\\Videos",        date:null,         fav:false, watched:false, unwanted:false},
+  {id:20, name:"travel_vlog_japan.mp4",     path:"D:\\Videos\\Vlogs",         date:null,         fav:false, watched:false, unwanted:false},
+  {id:21, name:"sports_highlights_22.mp4",  path:"G:\\Sports",                  date:null,         fav:false, watched:false, unwanted:false},
+  {id:22, name:"animated_feature_4k.mkv",   path:"K:\\Animation",               date:null,         fav:false, watched:false, unwanted:false},
+  {id:23, name:"behind_scenes_director.mp4",path:"G:\\Films\\Extras",         date:null,         fav:false, watched:false, unwanted:false},
+  {id:24, name:"retro_gaming_marathon.mp4", path:"C:\\Videos\\Gaming",        date:null,         fav:false, watched:false, unwanted:false},
+];
+
+let videos = VIDEOS.map(v => ({...v}));
+let selected = new Set();
+let currentTab = 'queue';
+let sortCol = null, sortDesc = false;
+let lastPickedId = null;
+
+// ── Filtering ─────────────────────────────────────────────────────
+function getRows() {
+  let rows;
+  if (currentTab === 'queue')     rows = videos.filter(v => !v.watched && !v.unwanted || (v.fav && !v.unwanted));
+  else if (currentTab === 'full') rows = videos.filter(v => !v.unwanted);
+  else if (currentTab === 'favorites') rows = videos.filter(v => v.fav);
+  else if (currentTab === 'watched')   rows = videos.filter(v => v.watched);
+  else rows = videos;
+
+  if (sortCol) {
+    rows = [...rows].sort((a,b) => {
+      let va, vb;
+      if (sortCol === 'star')   { va = a.fav?0:1; vb = b.fav?0:1; }
+      else if (sortCol==='name'){ va = a.name.toLowerCase(); vb = b.name.toLowerCase(); }
+      else if (sortCol==='path'){ va = a.path.toLowerCase(); vb = b.path.toLowerCase(); }
+      else if (sortCol==='date'){ va = a.date||''; vb = b.date||''; }
+      else if (sortCol==='status'){ va = statusOrder(a); vb = statusOrder(b); }
+      if (va < vb) return sortDesc ? 1 : -1;
+      if (va > vb) return sortDesc ? -1 : 1;
+      return 0;
+    });
+  }
+  return rows;
+}
+function statusOrder(v) {
+  if (v.unwanted) return 0;
+  if (v.watched)  return 1;
+  if (v.fav)      return 2;
+  return 3;
+}
+
+// ── Render ────────────────────────────────────────────────────────
+function render() {
+  const rows = getRows();
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:3rem;color:var(--muted)">
+      No videos in this view.</td></tr>`;
+    return;
+  }
+
+  rows.forEach(v => {
+    const tr = document.createElement('tr');
+    if (selected.has(v.id)) tr.classList.add('selected');
+    if (v.watched && !v.fav) tr.classList.add('watched');
+    if (v.fav)     tr.classList.add('favorite');
+    if (v.unwanted) tr.classList.add('unwanted');
+    tr.dataset.id = v.id;
+
+    const status = v.unwanted ? '<span class="badge unwanted">Unwanted</span>'
+                 : v.watched  ? '<span class="badge watched">Watched</span>'
+                 : v.fav      ? '<span class="badge fav">Favourite</span>'
+                 :               '<span class="badge queue">In Queue</span>';
+
+    tr.innerHTML = `
+      <td class="star" title="Toggle favourite">${v.fav ? '★' : '☆'}</td>
+      <td class="name" title="${v.name}">${v.name}</td>
+      <td class="path" title="${v.path}\\${v.name}">${v.path}</td>
+      <td class="date">${v.date ? v.date : '—'}</td>
+      <td class="status">${status}</td>
+    `;
+
+    tr.querySelector('.star').addEventListener('click', e => {
+      e.stopPropagation(); toggleFav(v.id);
+    });
+    tr.addEventListener('click', e => {
+      if (e.shiftKey && selected.size > 0) {
+        const allIds = getRows().map(r => r.id);
+        const last = [...selected].at(-1);
+        const a = allIds.indexOf(last), b = allIds.indexOf(v.id);
+        const [lo,hi] = [Math.min(a,b), Math.max(a,b)];
+        allIds.slice(lo, hi+1).forEach(id => selected.add(id));
+      } else if (e.ctrlKey || e.metaKey) {
+        selected.has(v.id) ? selected.delete(v.id) : selected.add(v.id);
+      } else {
+        selected.clear(); selected.add(v.id);
+      }
+      updateSelInfo(); render();
+    });
+    tbody.appendChild(tr);
+  });
+
+  updateStats();
+}
+
+function updateSelInfo() {
+  const n = selected.size;
+  document.getElementById('sel-info').textContent =
+    n === 0 ? 'None selected' : n === 1 ? '1 selected:' : `${n} selected:`;
+}
+
+function updateStats() {
+  const q = videos.filter(v => (!v.watched || v.fav) && !v.unwanted).length;
+  const w = videos.filter(v => v.watched).length;
+  const f = videos.filter(v => v.fav).length;
+  const t = videos.filter(v => !v.unwanted).length;
+  document.getElementById('stat-total').textContent  = t;
+  document.getElementById('stat-queue').textContent  = q;
+  document.getElementById('stat-watched').textContent= w;
+  document.getElementById('stat-favs').textContent   = f;
+  document.getElementById('sb-total').textContent    = t;
+  document.getElementById('sb-queue').textContent    = q;
+  document.getElementById('sb-watched').textContent  = w;
+  document.getElementById('sb-favs').textContent     = f;
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────
+function switchTab(btn, tab) {
+  document.querySelectorAll('.tab').forEach(t => { t.classList.remove('active'); t.setAttribute('aria-selected','false'); });
+  btn.classList.add('active'); btn.setAttribute('aria-selected','true');
+  currentTab = tab; selected.clear(); updateSelInfo(); render();
+  setStatus(`Viewing: ${btn.textContent}`);
+}
+
+// ── Sort ──────────────────────────────────────────────────────────
+function sortBy(col) {
+  if (sortCol === col) { sortDesc ? (sortCol=null,sortDesc=false) : (sortDesc=true); }
+  else { sortCol = col; sortDesc = false; }
+  ['star','name','path','date','status'].forEach(c => {
+    const el = document.getElementById('sort-'+c);
+    if (el) el.textContent = '';
+    document.querySelector(`[onclick="sortBy('${c}')"]`)?.classList.remove('sorted');
+  });
+  if (sortCol) {
+    const el = document.getElementById('sort-'+sortCol);
+    if (el) el.textContent = sortDesc ? ' ▼' : ' ▲';
+    document.querySelector(`[onclick="sortBy('${sortCol}')"]`)?.classList.add('sorted');
+  }
+  render();
+}
+
+// ── Actions ───────────────────────────────────────────────────────
+function getSelected() { return videos.filter(v => selected.has(v.id)); }
+
+function toggleFav(id) {
+  const v = videos.find(v => v.id === id);
+  if (!v) return;
+  v.fav = !v.fav;
+  showToast(v.fav ? `★ Favourited: ${v.name}` : `☆ Unfavourited: ${v.name}`, 'success');
+  setStatus(v.fav ? 'Added to favourites.' : 'Removed from favourites.');
+  render();
+}
+
+function actPlay() {
+  const sel = getSelected();
+  if (!sel.length) { showToast('Select a video first','info'); return; }
+  const v = sel[0];
+  document.getElementById('np-title').textContent = v.name;
+  const np = document.getElementById('now-playing');
+  np.classList.add('show');
+  setTimeout(() => np.classList.remove('show'), 4000);
+  setStatus(`Playing: ${v.name}`);
+  lastPickedId = v.id;
+  document.getElementById('last-name').textContent = v.name;
+  document.getElementById('last-picked').classList.add('visible');
+}
+
+function actFav() {
+  const sel = getSelected();
+  if (!sel.length) { showToast('Select videos first','info'); return; }
+  sel.forEach(v => v.fav = !v.fav);
+  showToast(`Toggled favourite on ${sel.length} video(s)`, 'success');
+  setStatus(`Toggled favourite on ${sel.length} item(s).`);
+  render();
+}
+
+function actWatched() {
+  const sel = getSelected();
+  if (!sel.length) { showToast('Select videos first','info'); return; }
+  sel.forEach(v => { if (!v.fav) { v.watched = true; v.date = new Date().toISOString().slice(0,10); } });
+  showToast(`Marked ${sel.length} video(s) as watched`, 'success');
+  setStatus(`Marked ${sel.length} item(s) as watched.`);
+  selected.clear(); updateSelInfo(); render();
+}
+
+function actUnwatched() {
+  const sel = getSelected();
+  if (!sel.length) { showToast('Select videos first','info'); return; }
+  sel.forEach(v => { v.watched = false; v.date = null; });
+  showToast(`Returned ${sel.length} video(s) to queue`, 'success');
+  setStatus(`Marked ${sel.length} item(s) as unwatched.`);
+  selected.clear(); updateSelInfo(); render();
+}
+
+function actUnwanted() {
+  const sel = getSelected();
+  if (!sel.length) { showToast('Select videos first','info'); return; }
+  sel.forEach(v => v.unwanted = true);
+  showToast(`Marked ${sel.length} video(s) as unwanted`, 'info');
+  setStatus(`Marked ${sel.length} item(s) as unwanted.`);
+  selected.clear(); updateSelInfo(); render();
+}
+
+function actRemove() {
+  const sel = getSelected();
+  if (!sel.length) { showToast('Select videos first','info'); return; }
+  sel.forEach(v => { videos = videos.filter(x => x.id !== v.id); });
+  showToast(`Removed ${sel.length} video(s)`, 'info');
+  setStatus(`Removed ${sel.length} item(s).`);
+  selected.clear(); updateSelInfo(); render();
+}
+
+// ── Random pick ───────────────────────────────────────────────────
+function pickRandom() {
+  const pool = videos.filter(v => (!v.watched || v.fav) && !v.unwanted);
+  if (!pool.length) { showToast('Queue is empty — rebuild it!','info'); return; }
+
+  const btn = document.getElementById('rand-btn');
+  const icon = document.getElementById('rand-icon');
+  btn.disabled = true; icon.classList.add('spinning');
+
+  setTimeout(() => {
+    icon.classList.remove('spinning');
+    btn.disabled = false;
+
+    const v = pool[Math.floor(Math.random() * pool.length)];
+    lastPickedId = v.id;
+
+    // Mark as watched (non-favs)
+    if (!v.fav) { v.watched = true; v.date = new Date().toISOString().slice(0,10); }
+
+    document.getElementById('last-name').textContent = v.name;
+    document.getElementById('last-picked').classList.add('visible');
+
+    // Show now playing
+    document.getElementById('np-title').textContent = v.name;
+    const np = document.getElementById('now-playing');
+    np.classList.add('show');
+    setTimeout(() => np.classList.remove('show'), 4000);
+
+    // Flash the row if visible
+    selected.clear(); selected.add(v.id); updateSelInfo();
+    render();
+
+    // Scroll to flashed row
+    setTimeout(() => {
+      const row = document.querySelector(`tr[data-id="${v.id}"]`);
+      if (row) { row.classList.add('flash'); row.scrollIntoView({block:'center',behavior:'smooth'}); }
+    }, 50);
+
+    setStatus(`Picked: ${v.name}`);
+    showToast(`🎲 Selected: ${v.name}`, 'success');
+  }, 500);
+}
+
+function markLastWatched() {
+  if (!lastPickedId) { showToast('No video picked yet','info'); return; }
+  const v = videos.find(x => x.id === lastPickedId);
+  if (v && !v.fav) { v.watched = true; v.date = new Date().toISOString().slice(0,10); }
+  showToast('Last video marked as watched ✓','success');
+  render();
+}
+
+function rebuildQueue() {
+  videos.forEach(v => { if (!v.fav) { v.watched = false; v.date = null; } });
+  showToast('Queue rebuilt — all videos restored ✓','success');
+  setStatus('Queue rebuilt.');
+  render();
+}
+
+// ── UI helpers ────────────────────────────────────────────────────
+let toastTimer;
+function showToast(msg, type='info') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = `toast show ${type}`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function setStatus(msg) {
+  document.getElementById('topbar-status').textContent = msg;
+  document.getElementById('status-msg').textContent = msg;
+}
+
+// ── Init ──────────────────────────────────────────────────────────
+render();
+</script>
+</body>
+</html>
